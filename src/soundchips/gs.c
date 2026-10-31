@@ -550,6 +550,7 @@ int gs_load_rom(void)
 
 void gs_enable(void)
 {
+  int i;
 
   if (!MACHINE_IS_SPECTRUM) {
     debug_printf(VERBOSE_INFO,"Can not enable general sound on non Spectrum machine");
@@ -563,6 +564,11 @@ void gs_enable(void)
 	gs_alloc_memory();
 	if (gs_load_rom()) return;
 
+	for (i=0;i<4;i++) {
+		gs_dac_channels[i]=128;
+		gs_volumes[i]=0;
+	}
+	gs_dac_valor_final_left=gs_dac_valor_final_right=128;
 
 	gs_enabled.v=1;
 
