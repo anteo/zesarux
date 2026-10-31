@@ -711,7 +711,7 @@ char audio_valor_enviar_sonido_izquierdo;
 char audio_valor_enviar_sonido_derecho;
 
 
-z80_byte audiodac_last_value_data;
+z80_byte audiodac_last_value_data=128;
 
 z80_bit audiodac_enabled={0};
 

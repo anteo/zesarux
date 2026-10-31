@@ -1014,6 +1014,7 @@ void reset_cpu(void)
 
 
     debug_printf (VERBOSE_INFO,"Reset cpu");
+    audiodac_last_value_data=128;
 
     if (esxdos_umount_on_reset.v) {
         if (esxdos_handler_enabled.v) {
