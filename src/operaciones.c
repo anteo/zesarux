@@ -8946,7 +8946,16 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
 	z80_byte anterior_out_254=out_254;
 
     modificado_border.v=1;
-    reset_beeper_silence_detection_counter();
+	int update_beeper=1;
+	if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES &&
+		(beeper_mic_mixer_current_mode==BEEPER_MIC_MIXER_NORMAL ||
+		 beeper_mic_mixer_current_mode==BEEPER_MIC_MIXER_ONLY_BEEPER)) {
+		update_beeper=beeper_spectrum_speaker_changed(value);
+		if (update_beeper) reset_beeper_silence_detection_counter();
+	}
+	else {
+		reset_beeper_silence_detection_counter();
+	}
 
     //ay_player_silence_detection_counter=0;
 
@@ -9000,7 +9009,9 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
         */
 
         //Extracted from Fuse emulator
-        set_value_beeper( (!!(value & 0x10) << 1) + ( (!(value & 0x8))  ) );
+        if (update_beeper) {
+            set_value_beeper( (!!(value & 0x10) << 1) + ( (!(value & 0x8))  ) );
+        }
     }
 
 
@@ -9077,7 +9088,7 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
         }
     }
 
-    set_value_beeper_on_array(value_beeper);
+    if (update_beeper) set_value_beeper_on_array(value_beeper);
 
 }
 

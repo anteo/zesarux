@@ -894,6 +894,8 @@ void cold_start_cpu_registers(void)
         out_254_original_value=out_254=0;
     }
 
+	if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES) beeper_spectrum_reset_state();
+
     modificado_border.v=1;
 
     //Modo BOOTM y cambio de otros settings del menu emulador
@@ -1014,6 +1016,7 @@ void reset_cpu(void)
 
 
     debug_printf (VERBOSE_INFO,"Reset cpu");
+	if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES) beeper_spectrum_reset_state();
     audiodac_last_value_data=128;
 
     if (esxdos_umount_on_reset.v) {

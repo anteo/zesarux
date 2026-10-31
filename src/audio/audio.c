@@ -876,7 +876,32 @@ z80_bit audio_nagra_effect={0};
 
 //Similar a silence_detection_counter pero solo para operaciones del beeper
 int beeper_silence_detection_counter=0;
+static int beeper_spectrum_speaker_initialized=0;
+static int beeper_spectrum_speaker_state=0;
 
+int beeper_spectrum_speaker_changed(z80_byte value)
+{
+	int speaker_state=(value & 0x10)!=0;
+	if (beeper_spectrum_speaker_initialized==0) {
+		beeper_spectrum_speaker_initialized=1;
+		beeper_spectrum_speaker_state=speaker_state;
+		return 0;
+	}
+
+	if (speaker_state==beeper_spectrum_speaker_state) return 0;
+
+	beeper_spectrum_speaker_state=speaker_state;
+	return 1;
+}
+
+void beeper_spectrum_reset_state(void)
+{
+	beeper_spectrum_speaker_initialized=0;
+	beeper_spectrum_speaker_state=0;
+	value_beeper=0;
+	beeper_silence_detection_counter=SILENCE_DETECTION_MAX;
+	reset_silence_detection_counter();
+}
 
 //decir que el thread de sonido debe enviar audio o no
 z80_bit audio_playing;
