@@ -37,6 +37,7 @@
 #include "audio.h"
 
 z80_bit gs_enabled={0};
+z80_bit gs_enabled_on_start={0};
 
 
 

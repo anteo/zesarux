@@ -73,6 +73,7 @@
 #include "z88.h"
 #include "audio.h"
 #include "audio_ayplayer.h"
+#include "gs.h"
 #include "playtzx.h"
 #include "tape_tzx.h"
 #include "tape_pzx.h"
@@ -5513,6 +5514,8 @@ int util_write_configfile(void)
 
     if (audiodac_enabled.v)                         ADD_STRING_CONFIG,"--enableaudiodac");
                                                     ADD_STRING_CONFIG,"--audiodactype \"%s\"",audiodac_types[audiodac_selected_type].name);
+
+    if (gs_enabled.v)                               ADD_STRING_CONFIG,"--enablegeneralsound");
 
     if (tsconf_vdac_with_pwm.v)                     ADD_STRING_CONFIG,"--tsconf-vdac-with-pwm");
 

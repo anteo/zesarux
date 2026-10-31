@@ -41,6 +41,7 @@
 
 
 extern z80_bit gs_enabled;
+extern z80_bit gs_enabled_on_start;
 extern void gs_enable(void);
 extern void gs_disable(void);
 extern void gs_fetch_opcodes_scanlines(void);
