@@ -711,7 +711,7 @@ char audio_valor_enviar_sonido_izquierdo;
 char audio_valor_enviar_sonido_derecho;
 
 
-z80_byte audiodac_last_value_data;
+z80_byte audiodac_last_value_data=128;
 
 z80_bit audiodac_enabled={0};
 
@@ -876,7 +876,32 @@ z80_bit audio_nagra_effect={0};
 
 //Similar a silence_detection_counter pero solo para operaciones del beeper
 int beeper_silence_detection_counter=0;
+static int beeper_spectrum_speaker_initialized=0;
+static int beeper_spectrum_speaker_state=0;
 
+int beeper_spectrum_speaker_changed(z80_byte value)
+{
+	int speaker_state=(value & 0x10)!=0;
+	if (beeper_spectrum_speaker_initialized==0) {
+		beeper_spectrum_speaker_initialized=1;
+		beeper_spectrum_speaker_state=speaker_state;
+		return 0;
+	}
+
+	if (speaker_state==beeper_spectrum_speaker_state) return 0;
+
+	beeper_spectrum_speaker_state=speaker_state;
+	return 1;
+}
+
+void beeper_spectrum_reset_state(void)
+{
+	beeper_spectrum_speaker_initialized=0;
+	beeper_spectrum_speaker_state=0;
+	value_beeper=0;
+	beeper_silence_detection_counter=SILENCE_DETECTION_MAX;
+	reset_silence_detection_counter();
+}
 
 //decir que el thread de sonido debe enviar audio o no
 z80_bit audio_playing;
@@ -1379,22 +1404,14 @@ void envio_audio(void)
 		//pero... como aqui se llama cada 5 frames de pantalla, esto o bien esta lleno el buffer,
 		//o al buffer le faltan 5 bytes para llenar minimo.
 
-		//printf ("audio_buffer_indice: %d AUDIO_BUFFER_SIZE: %d\n",audio_buffer_indice,AUDIO_BUFFER_SIZE);
-		if (audio_buffer_indice<AUDIO_BUFFER_SIZE-1 && audio_buffer_indice>0) {
-			//int debug_diferencia=AUDIO_BUFFER_SIZE-1-audio_buffer_indice;
-			//printf ("entrando %d dif: %d\n",temp_borrarrrr++,debug_diferencia);
-			//Aqui audio_buffer_indice siempre deberia entrar >0. pero comprobamos por si acaso
-			char valor_enviar;
-			valor_enviar=audio_buffer[audio_buffer_indice-1];
-
-			//printf ("valor a enviar: %d\n",valor_enviar);
-
-	                while (audio_buffer_indice<AUDIO_BUFFER_SIZE) {
-        	        	audio_buffer[audio_buffer_indice++]=valor_enviar;
-				//printf ("en envio_audio. audio_buffer_indice: %d\n",audio_buffer_indice);
-	                }
-
-			//printf ("saliendo %d dif: %d\n",temp_borrarrrr++,debug_diferencia);
+		// Completar el bloque con la última pareja estéreo disponible.
+		if (audio_buffer_indice>0 && audio_buffer_indice<AUDIO_BUFFER_SIZE*2-2) {
+			char izquierdo=audio_buffer[audio_buffer_indice-2];
+			char derecho=audio_buffer[audio_buffer_indice-1];
+			while (audio_buffer_indice<AUDIO_BUFFER_SIZE*2) {
+				audio_buffer[audio_buffer_indice++]=izquierdo;
+				audio_buffer[audio_buffer_indice++]=derecho;
+			}
 		}
 
 		//conmutar audio buffer

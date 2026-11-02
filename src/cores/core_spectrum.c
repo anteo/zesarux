@@ -533,6 +533,7 @@ void core_spectrum_fin_scanline(void)
         //audio_valor_enviar_sonido=0;
 
         audio_valor_enviar_sonido_izquierdo=audio_valor_enviar_sonido_derecho=0;
+	    char beeper_sample=0;
 
         audio_valor_enviar_sonido_izquierdo +=da_output_ay_izquierdo();
         audio_valor_enviar_sonido_derecho +=da_output_ay_derecho();
@@ -544,12 +545,16 @@ void core_spectrum_fin_scanline(void)
 
         if (beeper_enabled.v) {
             if (beeper_real_enabled==0) {
-                audio_valor_enviar_sonido_izquierdo += value_beeper;
-                audio_valor_enviar_sonido_derecho += value_beeper;
+                if (!(MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES && beeper_silence_detection_counter==SILENCE_DETECTION_MAX)) {
+                    beeper_sample=value_beeper;
+                }
+                audio_valor_enviar_sonido_izquierdo += beeper_sample;
+                audio_valor_enviar_sonido_derecho += beeper_sample;
             }
 
             else {
                 char suma_beeper=get_value_beeper_sum_array();
+                beeper_sample=suma_beeper;
                 audio_valor_enviar_sonido_izquierdo += suma_beeper;
                 audio_valor_enviar_sonido_derecho += suma_beeper;
                 beeper_new_line();

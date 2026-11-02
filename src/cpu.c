@@ -894,6 +894,8 @@ void cold_start_cpu_registers(void)
         out_254_original_value=out_254=0;
     }
 
+	if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES) beeper_spectrum_reset_state();
+
     modificado_border.v=1;
 
     //Modo BOOTM y cambio de otros settings del menu emulador
@@ -1014,6 +1016,8 @@ void reset_cpu(void)
 
 
     debug_printf (VERBOSE_INFO,"Reset cpu");
+	if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES) beeper_spectrum_reset_state();
+    audiodac_last_value_data=128;
 
     if (esxdos_umount_on_reset.v) {
         if (esxdos_handler_enabled.v) {
@@ -1294,6 +1298,7 @@ util_stats_init();
     }
 
     if (MACHINE_IS_SPECTRUM && betadisk_enabled.v) betadisk_reset();
+    if (MACHINE_IS_PENTAGON) pentagon_trdos_reset();
 
     if (MACHINE_IS_QL) {
         m68k_init();
@@ -1532,7 +1537,8 @@ void malloc_mem_machine(void) {
         else if (MACHINE_IS_SPECTRUM_128_P2) {
 
                 //32 kb rom, 128-1024 ram
-                malloc_machine((32+1024)*1024);
+                //16kb mas en caso de pentagon para la rom de tr-dos
+                malloc_machine(((MACHINE_IS_PENTAGON ? 48 : 32)+1024)*1024);
                 random_ram(memoria_spectrum+32768,1024*1024);
 
         mem_init_memory_tables_128k();
@@ -2861,8 +2867,9 @@ void set_machine_params(void)
 
             //Pentagon
             poke_byte=poke_byte_spectrum_128k;
-            peek_byte=peek_byte_spectrum_128k;
-            peek_byte_no_time=peek_byte_no_time_spectrum_128k;
+            peek_byte=peek_byte_pentagon;
+            peek_byte_no_time=peek_byte_no_time_pentagon;
+            fetch_opcode=fetch_opcode_pentagon;
             poke_byte_no_time=poke_byte_no_time_spectrum_128k;
             lee_puerto=lee_puerto_spectrum;
             ay_chip_present.v=1;
@@ -3771,6 +3778,15 @@ void rom_load(char *romfilename)
         leidos=fread(rom_mem_table[0],1,expected_rom_size,ptr_romfile);
         if (leidos!=expected_rom_size) {
             debug_printf(VERBOSE_ERR,"Error loading ROM. Expected size: %d Loaded: %d",expected_rom_size,leidos);
+        }
+
+        //Rom de tr-dos para pentagon
+        if (MACHINE_IS_PENTAGON) {
+            FILE *trdos_rom;
+            open_sharedfile(BETADISK_ROM_FILENAME,&trdos_rom);
+            if (trdos_rom==NULL || fread(pentagon_trdos_rom,1,16384,trdos_rom)!=16384)
+                debug_printf(VERBOSE_ERR,"Error loading Pentagon TR-DOS ROM");
+            if (trdos_rom!=NULL) fclose(trdos_rom);
         }
 
     }

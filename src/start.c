@@ -63,6 +63,7 @@
 #include "tape_smp.h"
 #include "audio.h"
 #include "audio_ayplayer.h"
+#include "gs.h"
 #include "screen.h"
 #include "screen_fx.h"
 #include "ay38912.h"
@@ -857,6 +858,8 @@ void zesarux_cmdline_help_expert(void)
 
 printf (
         "\n"
+        "--enablegeneralsound             Enable General Sound emulation\n"
+        "--disablegeneralsound            Disable General Sound emulation\n"
         "--audiovolume n                  Sets the audio output volume to percentage n\n"
         "--nagraaudio                     Enable Nagravision audio filter\n"
         "--zx8081vsyncsound               Enable vsync/tape sound on ZX80/81\n"
@@ -6816,6 +6819,14 @@ int parse_cmdline_options(int desde_commandline)
                                                                 audiodac_enabled.v=1;
             }
 
+            else if (!strcmp(argv[puntero_parametro],"--enablegeneralsound")) {
+                gs_enabled_on_start.v=1;
+            }
+
+            else if (!strcmp(argv[puntero_parametro],"--disablegeneralsound")) {
+                gs_enabled_on_start.v=0;
+            }
+
             else if (!strcmp(argv[puntero_parametro],"--audiodactype")) {
                     siguiente_parametro_argumento();
 
@@ -9125,6 +9136,8 @@ Also, you should keep the following copyright message, beginning with "Begin Cop
     cold_start_cpu_registers();
 
     reset_cpu();
+
+    if (gs_enabled_on_start.v) gs_enable();
 
     //Algun parametro que se resetea con reset_cpu y/o set_machine y se puede haber especificado por linea de comandos
     if (command_line_zx8081_vsync_sound.v) zx8081_vsync_sound.v=1;

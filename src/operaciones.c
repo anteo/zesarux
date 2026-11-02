@@ -26,6 +26,7 @@
 #include "tape.h"
 #include "ay38912.h"
 #include "mem128.h"
+#include "betadisk.h"
 #include "zx8081.h"
 #include "zxvision.h"
 #include "screen.h"
@@ -1175,6 +1176,45 @@ z80_byte fetch_opcode_spectrum(void)
 	set_visualmemopcodebuffer(reg_pc);
 #endif
 	return peek_byte_no_time (reg_pc);
+}
+
+static int pentagon_trdos_active=0;
+
+void pentagon_trdos_reset(void)
+{
+    pentagon_trdos_active=0;
+}
+
+z80_byte fetch_opcode_pentagon(void)
+{
+    if (reg_pc>=0x4000) pentagon_trdos_active=0;
+    else if ((reg_pc&0xff00)==0x3d00 && (puerto_32765&16)) pentagon_trdos_active=1;
+
+    if (pentagon_trdos_active) betadisk_handle_trdos_traps();
+    return fetch_opcode_spectrum();
+}
+
+z80_byte peek_byte_no_time_pentagon(z80_int dir)
+{
+    if (pentagon_trdos_active && dir<0x4000) {
+#ifdef EMULATE_VISUALMEM
+        set_visualmemreadbuffer(dir);
+#endif
+        return pentagon_trdos_rom[dir];
+    }
+    return peek_byte_no_time_spectrum_128k(dir);
+}
+
+z80_byte peek_byte_pentagon(z80_int dir)
+{
+    if (pentagon_trdos_active && dir<0x4000) {
+#ifdef EMULATE_VISUALMEM
+        set_visualmemreadbuffer(dir);
+#endif
+        t_estados+=3;
+        return pentagon_trdos_rom[dir];
+    }
+    return peek_byte_spectrum_128k(dir);
 }
 
 z80_byte fetch_opcode_tsconf(void)
@@ -2973,6 +3013,9 @@ void poke_byte_no_time_baseconf(z80_int dir,z80_byte valor)
 #endif
 
                 baseconf_write_memory_aux(dir,valor);
+		/* Una escritura en ventana de ROM puede ser un comando del chip
+		   flash: la función comprueba BF.1 y la protección de ventana. */
+		baseconf_flash_write(dir,valor);
 
 		z80_byte *puntero;
 		puntero=baseconf_return_segment_memory(dir);
@@ -3019,6 +3062,11 @@ z80_byte peek_byte_no_time_baseconf(z80_int dir)
 	#ifdef EMULATE_VISUALMEM
 		set_visualmemreadbuffer(dir);
 	#endif
+
+		/* En modo autoselect el chip flash responde con sus
+		   identificadores en lugar de la matriz de ROM. */
+		z80_byte valor_flash;
+		if (baseconf_flash_read(dir,&valor_flash)) return valor_flash;
 
 		z80_byte *puntero;
 		puntero=baseconf_return_segment_memory(dir);
@@ -8773,6 +8821,7 @@ static int beeper_ampl_only_mic[] = { 0, AMPLITUD_BEEPER, 0,
 void set_value_beeper(int v)
 {
 
+    int beeper_offset=beeper_ampl[3];
 
     switch (beeper_mic_mixer_current_mode) {
         case BEEPER_MIC_MIXER_NORMAL:
@@ -8782,14 +8831,17 @@ void set_value_beeper(int v)
         break;
 
         case BEEPER_MIC_MIXER_MIC_AMPLIFIED:
+            beeper_offset=beeper_ampl_amplify_mic[3];
             value_beeper = -beeper_ampl_amplify_mic[3] + beeper_ampl_amplify_mic[v]*2;
         break;
 
         case BEEPER_MIC_MIXER_ONLY_BEEPER:
+            beeper_offset=beeper_ampl_only_beeper[3];
             value_beeper = -beeper_ampl_only_beeper[3] + beeper_ampl_only_beeper[v]*2;
         break;
 
         case BEEPER_MIC_MIXER_ONLY_MIC:
+            beeper_offset=beeper_ampl_only_mic[3];
             value_beeper = -beeper_ampl_only_mic[3] + beeper_ampl_only_mic[v]*2;
         break;
     }
@@ -8803,6 +8855,7 @@ void set_value_beeper(int v)
         return;
     }
 
+    if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES) value_beeper+=beeper_offset;
 
 
 }
@@ -8906,7 +8959,16 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
 	z80_byte anterior_out_254=out_254;
 
     modificado_border.v=1;
-    reset_beeper_silence_detection_counter();
+	int update_beeper=1;
+	if (MACHINE_IS_SPECTRUM && !MACHINE_IS_INVES &&
+		(beeper_mic_mixer_current_mode==BEEPER_MIC_MIXER_NORMAL ||
+		 beeper_mic_mixer_current_mode==BEEPER_MIC_MIXER_ONLY_BEEPER)) {
+		update_beeper=beeper_spectrum_speaker_changed(value);
+		if (update_beeper) reset_beeper_silence_detection_counter();
+	}
+	else {
+		reset_beeper_silence_detection_counter();
+	}
 
     //ay_player_silence_detection_counter=0;
 
@@ -8960,7 +9022,9 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
         */
 
         //Extracted from Fuse emulator
-        set_value_beeper( (!!(value & 0x10) << 1) + ( (!(value & 0x8))  ) );
+        if (update_beeper) {
+            set_value_beeper( (!!(value & 0x10) << 1) + ( (!(value & 0x8))  ) );
+        }
     }
 
 
@@ -9037,7 +9101,7 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
         }
     }
 
-    set_value_beeper_on_array(value_beeper);
+    if (update_beeper) set_value_beeper_on_array(value_beeper);
 
 }
 

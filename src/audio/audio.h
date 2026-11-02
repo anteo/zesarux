@@ -184,6 +184,8 @@ extern int beeper_real_enabled;
 extern void beeper_new_line(void);
 extern char get_value_beeper_sum_array(void);
 extern void set_value_beeper_on_array(char value);
+extern int beeper_spectrum_speaker_changed(z80_byte value);
+extern void beeper_spectrum_reset_state(void);
 
 extern int audiovolume;
 
