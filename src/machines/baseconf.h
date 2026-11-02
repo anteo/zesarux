@@ -136,6 +136,8 @@ extern void baseconf_ps2_clear_fifo(void);
 extern void baseconf_ps2_scan_keyboard(void);
 extern void baseconf_ps2_reset(void);
 extern int baseconf_memory_write_allowed(z80_int direccion);
+extern void baseconf_flash_write(z80_int direccion,z80_byte valor);
+extern int baseconf_flash_read(z80_int direccion,z80_byte *valor);
 extern int baseconf_text_mode_active(void);
 extern z80_byte baseconf_get_video_mode(void);
 extern z80_int baseconf_get_palette_entry(z80_byte indice);

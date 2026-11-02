@@ -3013,6 +3013,9 @@ void poke_byte_no_time_baseconf(z80_int dir,z80_byte valor)
 #endif
 
                 baseconf_write_memory_aux(dir,valor);
+		/* Una escritura en ventana de ROM puede ser un comando del chip
+		   flash: la función comprueba BF.1 y la protección de ventana. */
+		baseconf_flash_write(dir,valor);
 
 		z80_byte *puntero;
 		puntero=baseconf_return_segment_memory(dir);
@@ -3059,6 +3062,11 @@ z80_byte peek_byte_no_time_baseconf(z80_int dir)
 	#ifdef EMULATE_VISUALMEM
 		set_visualmemreadbuffer(dir);
 	#endif
+
+		/* En modo autoselect el chip flash responde con sus
+		   identificadores en lugar de la matriz de ROM. */
+		z80_byte valor_flash;
+		if (baseconf_flash_read(dir,&valor_flash)) return valor_flash;
 
 		z80_byte *puntero;
 		puntero=baseconf_return_segment_memory(dir);
