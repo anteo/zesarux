@@ -844,7 +844,7 @@ void baseconf_write_memory_aux(z80_int direccion,z80_byte valor)
 z80_byte baseconf_get_video_mode(void)
 {
     return (baseconf_last_port_eff7&0x20) |
-        ((baseconf_last_port_eff7&1)<<1) |
+        ((baseconf_last_port_eff7&1)<<4) |
         (baseconf_last_port_77&7);
 }
 
