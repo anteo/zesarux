@@ -155,6 +155,7 @@
 #include "core_ql.h"
 #include "scorpion.h"
 #include "didaktikgama.h"
+#include "atmturbo.h"
 
 
 #ifdef COMPILE_STDOUT
@@ -1258,6 +1259,10 @@ util_stats_init();
         baseconf_reset_cpu();
     }
 
+    if (MACHINE_IS_ATM_TURBO) {
+        atmturbo_reset();
+    }
+
     if (MACHINE_IS_TBBLUE) {
         tbblue_reset();
         tbblue_set_memory_pages();
@@ -1532,6 +1537,10 @@ void malloc_mem_machine(void) {
 
         else if (MACHINE_IS_SCORPION) {
             scorpion_malloc_mem_machine();
+        }
+
+        else if (MACHINE_IS_ATM_TURBO) {
+            atmturbo_malloc_mem_machine();
         }
 
         else if (MACHINE_IS_SPECTRUM_128_P2) {
@@ -1898,7 +1907,11 @@ void set_machine_params(void)
 38=Didaktik Gama
 39=tk90x ula ferranti portuguese rom
 40=tk90xs ula ferranti spanish rom
-41-49=Reservadas otras Spectrum
+41=atm turbo 1
+42=atm turbo 2
+43=atm turbo 2+
+44=atm turbo 3
+45-49=Reservadas otras Spectrum
 
 100=colecovision
 101=sega sg1000
@@ -2266,6 +2279,15 @@ void set_machine_params(void)
         ula_contend_port_late=ula_contend_port_late_scorpion;
         cpu_duracion_pulso_interrupcion=36;
 
+    }
+
+    else if (MACHINE_IS_ATM_TURBO) {
+        /* ATM Turbo necesita funciones de contención antes del primer fetch. */
+        contend_read=contend_read_atmturbo;
+        contend_read_no_mreq=contend_read_no_mreq_atmturbo;
+        contend_write_no_mreq=contend_write_no_mreq_atmturbo;
+        ula_contend_port_early=ula_contend_port_early_atmturbo;
+        ula_contend_port_late=ula_contend_port_late_atmturbo;
     }
 
     else if (MACHINE_IS_SPECTRUM_128_P2_P2A_P3) {
@@ -2899,6 +2921,21 @@ void set_machine_params(void)
                 zcontroller_enabled.v=1;
                 ide_smuc_enabled.v=1;
             }
+
+        break;
+
+        case MACHINE_ID_ATM_TURBO1:
+        case MACHINE_ID_ATM_TURBO2:
+        case MACHINE_ID_ATM_TURBO2_PLUS:
+        case MACHINE_ID_ATM_TURBO3:
+
+            if (MACHINE_IS_ATM_TURBO1) fetch_opcode=fetch_opcode_atmturbo;
+            poke_byte=poke_byte_atmturbo;
+            peek_byte=peek_byte_atmturbo;
+            peek_byte_no_time=peek_byte_no_time_atmturbo;
+            poke_byte_no_time=poke_byte_no_time_atmturbo;
+            lee_puerto=lee_puerto_spectrum;
+            ay_chip_present.v=1;
 
         break;
 
@@ -3571,6 +3608,10 @@ void rom_load(char *romfilename)
             romfilename="profgmx6xx043.9226se.rom";
             break;
 
+            case MACHINE_ID_ATM_TURBO1:
+            romfilename="atm103.rom";
+            break;
+
             case MACHINE_ID_DIDAKTIKGAMA:
             romfilename="didaktikgama.rom";
             break;
@@ -3759,6 +3800,13 @@ void rom_load(char *romfilename)
     }
 
     else if (MACHINE_IS_SCORPION) {
+        leidos=fread(memoria_spectrum,1,expected_rom_size,ptr_romfile);
+        if (leidos!=expected_rom_size) {
+            debug_printf(VERBOSE_ERR,"Error loading ROM. Expected size: %d Loaded: %d",expected_rom_size,leidos);
+        }
+    }
+
+    else if (MACHINE_IS_ATM_TURBO) {
         leidos=fread(memoria_spectrum,1,expected_rom_size,ptr_romfile);
         if (leidos!=expected_rom_size) {
             debug_printf(VERBOSE_ERR,"Error loading ROM. Expected size: %d Loaded: %d",expected_rom_size,leidos);

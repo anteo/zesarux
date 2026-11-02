@@ -99,6 +99,7 @@
 #include "zxmmcplus.h"
 #include "scorpion.h"
 #include "didaktikgama.h"
+#include "atmturbo.h"
 
 
 void (*poke_byte)(z80_int dir,z80_byte valor);
@@ -7091,6 +7092,12 @@ z80_byte lee_puerto_spectrum_no_time(z80_byte puerto_h,z80_byte puerto_l)
 
 	}
 
+    if (MACHINE_IS_ATM_TURBO1 && atmturbo_trdos_is_active() &&
+        (puerto_l==0x1f || puerto_l==0x3f || puerto_l==0x5f ||
+         puerto_l==0x7f || puerto_l==0xff)) {
+        return atmturbo_fdc_read_port(puerto);
+    }
+
     //El VG93 de Scorpion, incluido GMX, responde durante TR-DOS.
     if (MACHINE_IS_SCORPION && trd_enabled.v &&
         scorpion_trdos_is_active() && reg_pc<0x4000 &&
@@ -7640,7 +7647,9 @@ z80_byte lee_puerto_spectrum_no_time(z80_byte puerto_h,z80_byte puerto_l)
 	//En un Inves, deberia ir al principio, pues el inves hace un AND con el valor de los perifericos que retornan valor en el puerto leido
         if ( (puerto_l & 1)==0 && !(MACHINE_IS_CHLOE) && !(MACHINE_IS_TIMEX_TS_TC_2068) && !(MACHINE_IS_PRISM) && !(MACHINE_IS_BASECONF) ) {
 
-		return lee_puerto_spectrum_ula(puerto_h);
+                z80_byte value=lee_puerto_spectrum_ula(puerto_h);
+                if (MACHINE_IS_ATM_TURBO1) value=atmturbo_read_port_fe(value);
+		return value;
 
         }
 
@@ -7714,6 +7723,11 @@ Bit 5 If set disable Chrome features ( reading/writing to port 1FFDh, reading fr
     if (gs_enabled.v) {
         if (puerto_l==0xBB) return gs_read_port_bb_from_speccy();
         if (puerto_l==0xB3) return gs_read_port_b3_from_speccy();
+    }
+
+    if (MACHINE_IS_ATM_TURBO) {
+        if (puerto_l==0xfb) return atmturbo_read_port_fb();
+        if (puerto_l==0x7b) return atmturbo_read_port_7b();
     }
 
 	if (MACHINE_IS_TSCONF) {
@@ -9200,6 +9214,13 @@ Port: 10-- ---- ---- --0-
 	}
 
 
+   if (MACHINE_IS_ATM_TURBO1 && atmturbo_trdos_is_active() &&
+       (puerto_l==0x1f || puerto_l==0x3f || puerto_l==0x5f ||
+        puerto_l==0x7f || puerto_l==0xff)) {
+       atmturbo_fdc_write_port(puerto,value);
+       return;
+   }
+
    //Los accesos directos al VG93 de Scorpion, incluido GMX, usan el controlador común.
     if (MACHINE_IS_SCORPION && trd_enabled.v &&
         scorpion_trdos_is_active() && reg_pc<0x4000 &&
@@ -9282,6 +9303,33 @@ Port: 10-- ---- ---- --0-
 
         }
 	}
+
+    if (MACHINE_IS_ATM_TURBO)
+    {
+
+        if (MACHINE_IS_ATM_TURBO1 && (puerto & 0x8202)==0 && (puerto & 1)) {
+            atmturbo_out_port_7dfd(puerto,value);
+            return;
+        }
+
+        if (MACHINE_IS_ATM_TURBO1 && (puerto & 7)==6) atmturbo_out_port_fe(puerto);
+
+        if (puerto==32765) {
+
+
+				atmturbo_out_port_32765(value);
+
+        }
+
+        if (puerto==0xfdfd) {
+
+
+				atmturbo_out_port_fdfd(value);
+
+        }
+
+
+    }
 
     if (MACHINE_IS_SCORPION)
     {
