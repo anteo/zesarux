@@ -2288,6 +2288,10 @@ void set_machine_params(void)
         contend_write_no_mreq=contend_write_no_mreq_atmturbo;
         ula_contend_port_early=ula_contend_port_early_atmturbo;
         ula_contend_port_late=ula_contend_port_late_atmturbo;
+        if (MACHINE_IS_ATM_TURBO2_FAMILY) atmturbo2_update_timing();
+
+        audiodac_selected_type=1; //Covox pentagon
+        audiodac_enabled.v=1;
     }
 
     else if (MACHINE_IS_SPECTRUM_128_P2_P2A_P3) {
@@ -2929,13 +2933,19 @@ void set_machine_params(void)
         case MACHINE_ID_ATM_TURBO2_PLUS:
         case MACHINE_ID_ATM_TURBO3:
 
-            if (MACHINE_IS_ATM_TURBO1) fetch_opcode=fetch_opcode_atmturbo;
+            if (MACHINE_IS_ATM_TURBO) fetch_opcode=fetch_opcode_atmturbo;
             poke_byte=poke_byte_atmturbo;
             peek_byte=peek_byte_atmturbo;
             peek_byte_no_time=peek_byte_no_time_atmturbo;
             poke_byte_no_time=poke_byte_no_time_atmturbo;
             lee_puerto=lee_puerto_spectrum;
             ay_chip_present.v=1;
+
+            if (MACHINE_IS_ATM_TURBO2_FAMILY) {
+                if (last_machine_type!=current_machine_type) {
+                    ide_atm_enabled.v=1;
+                }
+            }
 
         break;
 
@@ -3610,6 +3620,18 @@ void rom_load(char *romfilename)
 
             case MACHINE_ID_ATM_TURBO1:
             romfilename="atm103.rom";
+            break;
+
+            case MACHINE_ID_ATM_TURBO2:
+            romfilename="atm106.rom";
+            break;
+
+            case MACHINE_ID_ATM_TURBO2_PLUS:
+            romfilename="xbios135.rom";
+            break;
+
+            case MACHINE_ID_ATM_TURBO3:
+            romfilename="xbios135.rom";
             break;
 
             case MACHINE_ID_DIDAKTIKGAMA:
