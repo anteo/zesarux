@@ -8966,6 +8966,42 @@ void out_port_spectrum_fe_issue(z80_byte value)
 }
 
 
+/* Registra solo el evento visual del borde, sin efectos de ULA o sonido. */
+static void out_port_spectrum_border_raster_event(z80_byte border_colour)
+{
+    modificado_border.v=1;
+
+    if (rainbow_enabled.v) {
+        int i=t_estados;
+        int borde_pentagon=pentagon_timing.v ||
+            (MACHINE_IS_SCORPION_GMX && scorpion_gmx_uses_pentagon_timing());
+
+        if (borde_pentagon) i -=2;
+        else if (MACHINE_IS_SPECTRUM_128_P2) i+=2;
+
+        if (i>=0 && i<CURRENT_FULLBORDER_ARRAY_LENGTH) {
+            if (!borde_pentagon) i=i&(0xFFFFFFFF-3);
+
+            if (MACHINE_IS_INVES) {
+                /* Inves conserva el cambio de color previo a la máscara. */
+                fullbuffer_border[i]=out_254_original_value & 7;
+                i++;
+                if (i==CURRENT_FULLBORDER_ARRAY_LENGTH) i--;
+                fullbuffer_border[i]=out_254 & 7;
+            }
+            else {
+                int actualiza_fullbuffer_border=1;
+                if (MACHINE_IS_TBBLUE && tbblue_store_scanlines_border.v==0)
+                    actualiza_fullbuffer_border=0;
+
+                if (actualiza_fullbuffer_border)
+                    fullbuffer_border[i]=border_colour;
+            }
+        }
+    }
+}
+
+
 void out_port_spectrum_border(z80_int puerto,z80_byte value)
 {
     if (MACHINE_IS_ATM_TURBO1 && (puerto & 7)==6)
@@ -9042,67 +9078,9 @@ void out_port_spectrum_border(z80_int puerto,z80_byte value)
     }
 
 
-    if (rainbow_enabled.v) {
-        //printf ("%d\n",t_estados);
-        int i;
-        // GMX aplica el ajuste del puerto sin cambiar la geometría del menú.
-        int borde_pentagon=pentagon_timing.v ||
-            (MACHINE_IS_SCORPION_GMX && scorpion_gmx_uses_pentagon_timing());
+    out_port_spectrum_border_raster_event(get_border_colour_from_out());
 
-        i=t_estados;
-        //printf ("t_estados %d screen_testados_linea %d bord: %d\n",t_estados,screen_testados_linea,i);
-
-        //Con esto se ve la ukflag, la confusio y la rage se ven perfectas
-        if (borde_pentagon) i -=2;
-
-        else {
-            //Maquinas no pentagon, pero de 128k
-            //esto hace que se vea bien la ula128 y scroll2017
-            if (MACHINE_IS_SPECTRUM_128_P2) i+=2;
-        }
-
-        //Este i>=0 no haria falta en teoria
-        //pero ocurre a veces que justo al activar rainbow, t_estados_linea_actual tiene un valor descontrolado
-        if (i>=0 && i<CURRENT_FULLBORDER_ARRAY_LENGTH) {
-
-            //Ajuste valor de indice a multiple de 4 (lo normal en la ULA)
-            //O sea, quitamos los 2 bits inferiores
-            //Excepto en pentagon
-            if (!borde_pentagon) i=i&(0xFFFFFFFF-3);
-
-            //En Inves. Snow in border
-            if (MACHINE_IS_INVES) {
-                //Enviamos color real, sin mascara a la ROM
-                fullbuffer_border[i]=out_254_original_value & 7;
-
-                //E inmediatamente despues, color con mascara
-                i++;
-
-                //Si nos salimos del array, volver atras y sobreescribir color real
-                if (i==CURRENT_FULLBORDER_ARRAY_LENGTH) i--;
-
-                //Finalmente escribimos valor con mascara a la ROM
-                fullbuffer_border[i]=out_254 & 7;
-            }
-
-            else {
-                int actualiza_fullbuffer_border=1;
-                //No si esta desactivado en tbblue
-                if (MACHINE_IS_TBBLUE && tbblue_store_scanlines_border.v==0) {
-                    actualiza_fullbuffer_border=0;
-                }
-
-                if (actualiza_fullbuffer_border) {
-                    fullbuffer_border[i]=get_border_colour_from_out();
-                }
-            }
-            //printf ("cambio border i=%d color: %d\n",i,out_254 & 7);
-        }
-        //else printf ("Valor de border scanline fuera de rango: %d\n",i);
-    }
-
-
-    else {
+    if (!rainbow_enabled.v) {
         //Realvideo desactivado. Si esta autodeteccion de realvideo, hacer lo siguiente
         if (autodetect_rainbow.v) {
             //if (reg_pc>=16384) {
@@ -9143,9 +9121,11 @@ void out_port_spectrum_no_time(z80_int puerto,z80_byte value)
         //super wonder boy usa puerto 1fe
         //paperboy usa puertos xxfe
 	//Puerto 254 realmente es cualquier puerto par
-        if (MACHINE_IS_BASECONF && (puerto_l&0xf7)==0xf6) {
+	if (MACHINE_IS_BASECONF && (((puerto_l&0xf7)==0xf6) || puerto_l==0xfc)) {
                 baseconf_set_border_colour(puerto,value);
-                out_port_spectrum_border(puerto,value);
+                // #FC es un alias del borde sin efectos de beeper/salida de cinta.
+                if (puerto_l!=0xfc) out_port_spectrum_border(puerto,value);
+                else out_port_spectrum_border_raster_event(baseconf_get_border_colour());
         }
 
 	if ( (puerto & 1 )==0 && !(MACHINE_IS_CHLOE) && !(MACHINE_IS_TIMEX_TS_TC_2068) && !(MACHINE_IS_PRISM) && !(MACHINE_IS_BASECONF) ) {
