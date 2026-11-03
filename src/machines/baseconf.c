@@ -130,6 +130,7 @@ z80_byte baseconf_last_port_bf7; //OK ZSF
 
 
 z80_int baseconf_palette[BASECONF_PALETTE_ENTRIES]; //OK ZSF
+static z80_byte baseconf_get_current_output_palette_index(void);
 /* Paleta inicial tras un hard reset: copia las primeras 16 entradas de
    initial_prism_palette_zero (prism.c). Cada valor es RGB444 (0xRGB).
    Orden Spectrum en cada fila: negro, azul, rojo, magenta, verde, cian,
@@ -415,9 +416,8 @@ z80_byte baseconf_read_config_port(z80_byte puerto_h)
                        (baseconf_dos_signal ? 0x10 : 0) |
                        (baseconf_last_port_77&0x0f);
         case 0x0d: {
-                /* Los bits de color leídos tienen el mismo formato invertido
-                   que los datos escritos en #FF; 2 y 3 no están definidos. */
-                z80_int color=baseconf_palette[baseconf_border_colour&15];
+                /* #0DBE devuelve el color del píxel o borde que sale ahora. */
+                z80_int color=baseconf_palette[baseconf_get_current_output_palette_index()&15];
                 z80_byte r=(color>>8)&15;
                 z80_byte g=(color>>4)&15;
                 z80_byte b=color&15;
@@ -1065,11 +1065,10 @@ void screen_baseconf_refresca_text_mode(void)
     }
 }
 
-/* Devuelve el color de un pixel de la linea activa actual. El calculo es el
-   mismo que usa el render de frame completo, pero permite almacenarlo cuando
-   termina cada scanline. */
-// Obtiene el color del píxel (x,y) del modo indicado por mode; devuelve índice de paleta.
-static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
+/* Devuelve el indice de paleta del pixel activo (x,y) para todos los modos
+   BaseConf. Se comparte con las escrituras xxFF, que usan el indice presente
+   en la salida de video durante el ciclo de E/S. */
+static z80_byte baseconf_get_scanline_palette_index(z80_byte mode,int x,int y)
 {
     int vpage=(puerto_32765&8) ? 7 : 5;
     z80_byte value,attr,ink,paper;
@@ -1084,7 +1083,7 @@ static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
         value=baseconf_ram_mem_table[page][adr];
         if (x&1) value=((value&0x38)>>3) | ((value&0x80)>>4);
         else value=(value&7) | ((value&0x40)>>3);
-        return baseconf_get_palette_colour(value);
+        return value;
     }
 
     //Modo 00H, ATM EGA 320x200: reconstruye cada color de 4 bits desde cuatro planos de VRAM entrelazados.
@@ -1101,16 +1100,22 @@ static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
         value=baseconf_ram_mem_table[page][adr];
         if (x&1) value=((value&0x38)>>3) | ((value&0x80)>>4);
         else value=(value&7) | ((value&0x40)>>3);
-        return baseconf_get_palette_colour(value);
+        return value;
     }
 
     //Modo 23H, ZX hardware multicolor: usa un byte por grupo para seleccionar ink o paper en cada pixel.
     case 0x23: {
         int adr=((y&0xc0)<<5) | ((y&7)<<8) | ((y&0x38)<<2) | (x>>3);
         value=baseconf_ram_mem_table[vpage][adr];
-        ink=(value&7) | ((value&0x40)>>3);
-        paper=(value&0x78)>>3;
-        return baseconf_get_palette_colour((value&(0x80>>(x&7))) ? ink : paper);
+        attr=baseconf_ram_mem_table[vpage][adr+0x2000];
+        ink=(attr&7) | ((attr&0x40)>>3);
+        paper=((attr>>3)&7) | ((attr&0x40)>>3);
+        if ((attr&0x80) && estado_parpadeo.v) {
+            z80_byte aux=ink;
+            ink=paper;
+            paper=aux;
+        }
+        return (value&(0x80>>(x&7))) ? ink : paper;
     }
 
     //Modo 02H, ATM hardware multicolor 640x200: lee bitmap y atributo de paginas de VRAM separadas.
@@ -1121,7 +1126,7 @@ static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
         attr=baseconf_ram_mem_table[vpage^4][adr+half];
         ink=(attr&7) | ((attr&0x40)>>3);
         paper=((attr&0x38)>>3) | ((attr&0x80)>>4);
-        return baseconf_get_palette_colour((value&(0x80>>(x&7))) ? ink : paper);
+        return (value&(0x80>>(x&7))) ? ink : paper;
     }
 
     //Modo 06H, ATM text 640x200: obtiene el caracter y atributo entrelazados y consulta la fuente activa.
@@ -1140,7 +1145,7 @@ static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
         value=baseconf_text_font[caracter*8+(y&7)];
         ink=(attr&7) | ((attr&0x40)>>3);
         paper=((attr&0x38)>>3) | ((attr&0x80)>>4);
-        return baseconf_get_palette_colour((value&(0x80>>(x&7))) ? ink : paper);
+        return (value&(0x80>>(x&7))) ? ink : paper;
     }
 
     //Modo 07H, EVO text 640x200: obtiene caracter y atributo de cuatro zonas de una misma pagina de VRAM.
@@ -1160,7 +1165,7 @@ static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
         value=baseconf_text_font[caracter*8+(y&7)];
         ink=(attr&7) | ((attr&0x40)>>3);
         paper=((attr&0x38)>>3) | ((attr&0x80)>>4);
-        return baseconf_get_palette_colour((value&(0x80>>(x&7))) ? ink : paper);
+        return (value&(0x80>>(x&7))) ? ink : paper;
     }
 
     //Modo 03H o desconocido, ZX standard: combina el bitmap Spectrum con su atributo de celda 8x8.
@@ -1181,9 +1186,42 @@ static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
             ink=paper;
             paper=aux;
         }
-        return baseconf_get_palette_colour((value&(0x80>>(x&7))) ? ink : paper);
+        return (value&(0x80>>(x&7))) ? ink : paper;
     }
     }
+}
+
+/* Devuelve el color renderizado de un pixel del modo actual. */
+static z80_int baseconf_get_scanline_pixel(z80_byte mode,int x,int y)
+{
+    return baseconf_get_palette_colour(baseconf_get_scanline_palette_index(mode,x,y));
+}
+
+/* Indice de color que la salida de video presenta en el ciclo de E/S actual.
+   El render centrado y duplicado usa la misma geometria que el almacenado del
+   scanline para no confundir el color del borde con el ultimo valor escrito. */
+static z80_byte baseconf_get_current_output_palette_index(void)
+{
+    z80_byte mode=baseconf_get_video_mode();
+    int wide_mode=(mode==0 || mode==2 || mode==6 || mode==7);
+    int source_width=(mode==0) ? 320 : (wide_mode ? 640 : 256);
+    int source_height=wide_mode ? 200 : 192;
+    int active_x,active_y;
+    int line_tstate=(t_estados%screen_testados_linea)/cpu_turbo_speed;
+    int active_tstates=screen_testados_indice_borde_derecho-
+                       screen_testados_total_borde_izquierdo;
+
+    /* BaseConf muestra el display durante los 128 T-states previos al borde
+       derecho. Su ancho cambia por modo, pero ese intervalo temporal no. */
+    if (active_tstates>0 && line_tstate>=0 && line_tstate<active_tstates) {
+        active_x=(line_tstate*source_width)/active_tstates;
+        active_y=t_scanline_draw-screen_indice_inicio_pant;
+        if (active_x>=0 && active_x<source_width &&
+            active_y>=0 && active_y<source_height)
+            return baseconf_get_scanline_palette_index(mode,active_x,active_y)&15;
+    }
+
+    return baseconf_border_colour&15;
 }
 
 /* El scanline de video comienza en display, continua por el border derecho,
@@ -1649,21 +1687,22 @@ void baseconf_out_port(z80_int puerto,z80_byte valor)
                 if (!(baseconf_shadow_mode_port_77&0x40)) {
                         z80_int inverted_value=(~valor)&0xff;
                         z80_int inverted_port=(~puerto)&0xffff;
-                        int r=((inverted_value&0x02)<<2) |
-                              ((inverted_value&0x40)>>4) |
-                              ((inverted_port&0x0200)>>8) |
-                              ((inverted_port&0x4000)>>14);
-                        int g=((inverted_value&0x10)>>1) |
-                              ((inverted_value&0x80)>>5) |
-                              ((inverted_port&0x1000)>>11) |
-                              ((inverted_port&0x8000)>>15);
-                        int b=((inverted_value&0x01)<<3) |
-                              ((inverted_value&0x20)>>3) |
-                              ((inverted_port&0x0100)>>7) |
-                              ((inverted_port&0x2000)>>13);
-                        z80_int palette_colour=(r<<8)+(g<<4)+b;
-                        baseconf_palette[baseconf_border_colour]=palette_colour;
-                        modificado_border.v=1;
+                        int r=((inverted_value&0x02)<<2) | ((inverted_value&0x40)>>4);
+                        int g=((inverted_value&0x10)>>1) | ((inverted_value&0x80)>>5);
+                        int b=((inverted_value&0x01)<<3) | ((inverted_value&0x20)>>3);
+                        if (baseconf_last_port_bf&0x20) {
+                                r|=((inverted_port&0x0200)>>8) | ((inverted_port&0x4000)>>14);
+                                g|=((inverted_port&0x1000)>>11) | ((inverted_port&0x8000)>>15);
+                                b|=((inverted_port&0x0100)>>7) | ((inverted_port&0x2000)>>13);
+                        }
+                        else {
+                                /* RGB222: la FPGA repite los dos bits altos en los bajos. */
+                                r|=r>>2;
+                                g|=g>>2;
+                                b|=b>>2;
+                        }
+                        z80_byte palette_index=baseconf_get_current_output_palette_index();
+                        baseconf_palette[palette_index]=(r<<8)+(g<<4)+b;
 
                         //Los mismos colores que máquina Prism
                 }
