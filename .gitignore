@@ -68,5 +68,6 @@ src/install.sh
 *.kdev4
 
 # MacOS related
+**/.DS_Store
 /src/macos/zesarux.app/
 *.dmg
