@@ -7033,6 +7033,8 @@ z80_byte lee_puerto_spectrum_no_time(z80_byte puerto_h,z80_byte puerto_l)
 
 	z80_int puerto=value_8_to_16(puerto_h,puerto_l);
 
+    if (MACHINE_IS_BASECONF && puerto_l==0xef) return baseconf_uart_read(puerto_h&7);
+
     z80_byte valor_smuc;
     if (ide_smuc_read(puerto,&valor_smuc)) return valor_smuc;
     if (scorpion_gmx_zcontroller_read(puerto,&valor_smuc)) return valor_smuc;
@@ -7104,7 +7106,7 @@ z80_byte lee_puerto_spectrum_no_time(z80_byte puerto_h,z80_byte puerto_l)
 
     /* Estado del receptor XT en D7 de #7FFD y códigos serie en #7DFD. */
     if (MACHINE_IS_ATM_TURBO2_FAMILY && (puerto & 0x8202)==0x0200)
-        return MACHINE_IS_ATM_TURBO2PLUS_TURBO3 ? 0x7f : atmturbo2_read_keyboard_status();
+        return MACHINE_IS_ATM_TURBO2PLUS_TURBO3 ? atmturbo2plus_read_device_status() : atmturbo2_read_keyboard_status();
     if (MACHINE_IS_ATM_TURBO2_FAMILY && (puerto & 0x8203)==0x0001)
         return MACHINE_IS_ATM_TURBO2PLUS_TURBO3 ? 0xff : atmturbo2_read_keyboard_data();
 
@@ -9133,6 +9135,11 @@ void out_port_spectrum_no_time(z80_int puerto,z80_byte value)
 	z80_byte puerto_l=puerto&255;
 	z80_byte puerto_h=(puerto>>8)&0xFF;
 
+        if (MACHINE_IS_BASECONF && puerto_l==0xef) {
+                baseconf_uart_write(puerto_h&7,value);
+                return;
+        }
+
         if (ide_smuc_write(puerto,value)) return;
         if (scorpion_gmx_zcontroller_write(puerto,value)) return;
 
@@ -9831,7 +9838,7 @@ acts as expected unless this registe is explicitly changed by the user/software.
             puerto_l==0xBE || puerto_l==0xFF ||
             puerto_l==0x2f || puerto_l==0x4f || puerto_l==0x6f || puerto_l==0x8f ||
             puerto_l==0x77 || puerto_l==0x57 || (puerto&0x0FFF)==0xff7 || (puerto&0x0FFF)==0x7f7 ||
-            (puerto&0x0FFF)==0xbf7 || (puerto&0x8002)==0 || puerto==0xeff7 ||
+            (puerto&0x0FFF)==0xbf7 || (puerto&0x80fe)==0x00fc || puerto==0xeff7 ||
             puerto==0xDFF7 || puerto==0xDEF7 || puerto==0xBFF7 || puerto==0xBEF7)
 		{
 			//printf ("Out port baseconf port %04XH value %02XH. PC=%04XH\n",puerto,value,reg_pc);

@@ -89,48 +89,33 @@ void uartbridge_disable(void)
 
 z80_byte uartbridge_readdata(void)
 {
-
-
-	//No dispositivo abierto
-	if (!uartbridge_available()) return 0;
-
-    generic_footertext_print_operating("UART");
-
-	//printf ("Reading uart data\n");
-
-	//Devolver 0 por defecto si error leyendo
-	z80_byte byte_leido=0;
-
-	//printf ("Before chardevice_read\n");
-	int status=chardevice_read(uartbridge_handler,&byte_leido);
-	//printf ("After chardevice_read\n");
-
-	if (status<1) {
-		//printf ("Error reading uart data: %d\n",status);
-		//Error leyendo
-		//de momento no decir nada
-	}
-
-	return byte_leido;
+	z80_byte value=0;
+	uartbridge_try_read(&value);
+	return value;
 }
-
 
 void uartbridge_writedata(z80_byte value)
 {
+	uartbridge_try_write(value);
+}
 
-	//No dispositivo abierto
-	if (!uartbridge_available()) return;
+int uartbridge_try_read(z80_byte *value)
+{
+	if (!uartbridge_available()) return 0;
+	if (chardevice_read(uartbridge_handler,value)!=1) return 0;
+	generic_footertext_print_operating("UART");
+	return 1;
+}
 
-    generic_footertext_print_operating("UART");
+int uartbridge_try_write(z80_byte value)
+{
+	if (!uartbridge_available() || chardevice_write(uartbridge_handler,value)!=1) return 0;
+	generic_footertext_print_operating("UART");
+	return 1;
+}
 
-	//printf ("Writing uart data\n");
-
-	int status=chardevice_write(uartbridge_handler,value);
-
-	if (status<1) {
-		//Error escribiendo
-		//de momento no decir nada
-	}
-
+void uartbridge_discard_input(void)
+{
+	if (uartbridge_available()) chardevice_discard_input(uartbridge_handler);
 }
 

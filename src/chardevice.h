@@ -38,6 +38,7 @@ extern int chardevice_read(int handler,z80_byte *buffer);
 extern int chardevice_write(int handler,z80_byte valor_escribir);
 extern int chardevice_close(int handler);
 extern int chardevice_status(int handler);
+extern void chardevice_discard_input(int handler);
 
 
 enum chardevice_speed {

@@ -36,6 +36,7 @@
 #include "mmc.h"
 #include "betadisk.h"
 #include "timer.h"
+#include "uartbridge.h"
 
 
 // Estado de alimentación SD escrito por el firmware en el puerto 77h.
@@ -204,6 +205,107 @@ static const z80_byte baseconf_avr_boot_version[16]={
 static z80_byte baseconf_change_ram_page_7ffd(z80_byte value);
 static z80_byte baseconf_change_rom_page_trdos(z80_byte value);
 void baseconf_ps2_scan_keyboard(void);
+
+#define BASECONF_UART_FIFO_SIZE 16
+
+static struct {
+    z80_byte dll, dlm, ier, lcr, mcr, msr, scratch;
+    z80_byte rx[BASECONF_UART_FIFO_SIZE], tx[BASECONF_UART_FIFO_SIZE];
+    unsigned int rx_head, rx_count, tx_head, tx_count;
+} baseconf_uart = { .dll=1, .msr=0xa0, .scratch=0xff };
+
+// Entrega al puente los bytes pendientes, conservándolos si el destino no admite más.
+void baseconf_uart_flush_tx(void)
+{
+    if (!baseconf_uart.tx_count) return;
+    if (!uartbridge_available()) {
+        baseconf_uart.tx_count=0;
+        return;
+    }
+    while (baseconf_uart.tx_count && uartbridge_try_write(baseconf_uart.tx[baseconf_uart.tx_head])) {
+        baseconf_uart.tx_head=(baseconf_uart.tx_head+1)%BASECONF_UART_FIFO_SIZE;
+        baseconf_uart.tx_count--;
+    }
+}
+
+// Muestrea los bytes disponibles sin esperar a que llegue otro byte del host.
+static void baseconf_uart_fill_rx(void)
+{
+    while (baseconf_uart.rx_count<BASECONF_UART_FIFO_SIZE) {
+        unsigned int tail=(baseconf_uart.rx_head+baseconf_uart.rx_count)%BASECONF_UART_FIFO_SIZE;
+        if (!uartbridge_try_read(&baseconf_uart.rx[tail])) break;
+        baseconf_uart.rx_count++;
+    }
+}
+
+z80_byte baseconf_uart_read(z80_byte reg)
+{
+    switch (reg) {
+        case 0: {
+            if (baseconf_uart.lcr&0x80) return baseconf_uart.dll;
+            baseconf_uart_fill_rx();
+            if (!baseconf_uart.rx_count) return 0;
+            z80_byte value=baseconf_uart.rx[baseconf_uart.rx_head];
+            baseconf_uart.rx_head=(baseconf_uart.rx_head+1)%BASECONF_UART_FIFO_SIZE;
+            baseconf_uart.rx_count--;
+            return value;
+        }
+        case 1: return (baseconf_uart.lcr&0x80) ? baseconf_uart.dlm : baseconf_uart.ier;
+        case 2: return 1; // El AVR no genera interrupciones UART para la CPU Z80.
+        case 3: return baseconf_uart.lcr;
+        case 4: return baseconf_uart.mcr;
+        case 5: {
+            baseconf_uart_fill_rx();
+            baseconf_uart_flush_tx();
+            z80_byte status=baseconf_uart.tx_count ? 0 : 0x60;
+            if (baseconf_uart.rx_count) status|=1;
+            if (baseconf_uart.rx_count>=BASECONF_UART_FIFO_SIZE/2) status|=0x80;
+            return status;
+        }
+        case 6: {
+            // El puente indica CTS por disponibilidad del enlace, sin líneas físicas.
+            z80_byte status=uartbridge_available() ? 0xb0 : 0xa0;
+            z80_byte changed=((status^baseconf_uart.msr)&0x10) ? 1 : 0;
+            baseconf_uart.msr=status;
+            return status|changed;
+        }
+        case 7: return baseconf_uart.scratch;
+    }
+    return 0;
+}
+
+void baseconf_uart_write(z80_byte reg,z80_byte value)
+{
+    switch (reg) {
+        case 0:
+            if (baseconf_uart.lcr&0x80) baseconf_uart.dll=value;
+            else {
+                baseconf_uart_flush_tx();
+                if (baseconf_uart.tx_count<BASECONF_UART_FIFO_SIZE) {
+                    unsigned int tail=(baseconf_uart.tx_head+baseconf_uart.tx_count)%BASECONF_UART_FIFO_SIZE;
+                    baseconf_uart.tx[tail]=value;
+                    baseconf_uart.tx_count++;
+                    baseconf_uart_flush_tx();
+                }
+            }
+            break;
+        case 1:
+            if (baseconf_uart.lcr&0x80) baseconf_uart.dlm=value;
+            else baseconf_uart.ier=value&0x0f;
+            break;
+        case 2:
+            if (!(value&1)) break;
+            if (value&2) {
+                baseconf_uart.rx_count=0;
+                uartbridge_discard_input();
+            }
+            if (value&4) baseconf_uart.tx_count=0;
+            break;
+        case 3: baseconf_uart.lcr=value; break;
+        case 4: baseconf_uart.mcr=value&0x1f; break;
+        case 7: baseconf_uart.scratch=value; break;
+    }
+}
 
 // Reinicia la extensión PS/2 compartida por BaseConf y TSConf.
 void baseconf_ps2_reset(void)
@@ -1610,6 +1712,13 @@ void baseconf_hard_reset(void)
 
     debug_printf(VERBOSE_DEBUG,"BaseConf Hard reset cpu");
 
+    baseconf_uart.dll=1;
+    baseconf_uart.dlm=baseconf_uart.ier=baseconf_uart.lcr=baseconf_uart.mcr=0;
+    baseconf_uart.msr=0xa0;
+    baseconf_uart.scratch=0xff;
+    baseconf_uart.rx_head=baseconf_uart.rx_count=baseconf_uart.tx_head=baseconf_uart.tx_count=0;
+    uartbridge_discard_input();
+
     //Asignar bloques memoria
     int i;
     for (i=0;i<8;i++) {
@@ -1909,9 +2018,10 @@ segmento 0 pagina 0
                 if (valor&1) baseconf_mmu_flags[segmento] |=32;
         }
 
-        /* #7FFD sólo decodifica A15 y A1, como en el Spectrum 128K.
-           OUT (#FD),A también selecciona este registro si A15 de A es cero. */
-        else if ((puerto&0x8002)==0) {
+        /* La FPGA decodifica el byte bajo #FC/#FD y exige A15=0.
+           Usar sólo A15/A1 también paginaba RAM al escribir en Nemo IDE.
+           OUT (#FD),A sigue siendo válido cuando A15 de A es cero. */
+        else if ((puerto&0x80fe)==0x00fc) {
                 /* En modo de paginación 128K el bit 5 bloquea las escrituras
                    posteriores a #7FFD hasta reset. Las escrituras MMU mediante
                    #xFF7/#x7F7 continúan disponibles. */

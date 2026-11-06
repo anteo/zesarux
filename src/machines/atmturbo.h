@@ -100,6 +100,7 @@ extern z80_byte atmturbo2_ide_read_port(z80_int port);
 extern void atmturbo2_ide_write_port(z80_int port,z80_byte value);
 extern int atmturbo2plus_interrupts_enabled(void);
 extern z80_byte atmturbo2_read_keyboard_status(void);
+extern void atmturbo2_cursor_event(int direction,int pressed);
 extern z80_byte atmturbo2_read_keyboard_data(void);
 extern void atmturbo2_update_timing(void);
 extern void atmturbo_out_port_7dfd(z80_byte value);
@@ -117,10 +118,17 @@ extern int atmturbo_fdc_is_active(z80_int port,int reading);
 extern z80_byte atmturbo_fdc_read_port(z80_int port);
 extern void atmturbo_fdc_write_port(z80_int port,z80_byte value);
 
+extern z80_byte atmturbo_get_video_mode(void);
+extern char *atmturbo_get_video_mode_string(void);
 extern void atmturbo_refresca_pantalla(void);
 extern void atmturbo_store_scanline_rainbow_border(void);
 extern void atmturbo_store_scanline_rainbow_display(void);
 
 extern z80_bit ide_atm_enabled;
+
+extern int atmturbo_palette[];
+extern z80_int atm_get_palette_entry(z80_byte indice);
+
+extern z80_byte atmturbo2plus_read_device_status(void);
 
 #endif
