@@ -7025,6 +7025,8 @@ z80_byte lee_puerto_spectrum_no_time(z80_byte puerto_h,z80_byte puerto_l)
 
 	z80_int puerto=value_8_to_16(puerto_h,puerto_l);
 
+    if (MACHINE_IS_BASECONF && puerto_l==0xef) return baseconf_uart_read(puerto_h&7);
+
     z80_byte valor_smuc;
     if (ide_smuc_read(puerto,&valor_smuc)) return valor_smuc;
     if (scorpion_gmx_zcontroller_read(puerto,&valor_smuc)) return valor_smuc;
@@ -9130,6 +9132,11 @@ void out_port_spectrum_no_time(z80_int puerto,z80_byte value)
         //uno despues de otro
 	z80_byte puerto_l=puerto&255;
 	z80_byte puerto_h=(puerto>>8)&0xFF;
+
+        if (MACHINE_IS_BASECONF && puerto_l==0xef) {
+                baseconf_uart_write(puerto_h&7,value);
+                return;
+        }
 
         if (ide_smuc_write(puerto,value)) return;
         if (scorpion_gmx_zcontroller_write(puerto,value)) return;

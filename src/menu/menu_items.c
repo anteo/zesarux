@@ -15953,7 +15953,7 @@ void menu_uartbridge(MENU_ITEM_PARAMETERS)
 
 int menu_network_uartbridge_cond(void)
 {
-    if (MACHINE_IS_ZXUNO || MACHINE_IS_TBBLUE || MACHINE_IS_TSCONF) return 1;
+    if (MACHINE_IS_ZXUNO || MACHINE_IS_TBBLUE || MACHINE_IS_TSCONF || MACHINE_IS_BASECONF) return 1;
     else return 0;
 }
 
@@ -18191,7 +18191,7 @@ void menu_network(MENU_ITEM_PARAMETERS)
             menu_add_item_menu_tooltip(array_menu_common,"Bridge from emulated machine uart ports to a local serial uart device");
             menu_add_item_menu_ayuda(array_menu_common,"Bridge from emulated machine uart ports to a local serial uart device\n"
                 "It does NOT emulate a full uart device, just links from the emulated machine ports to a physical local device\n"
-                "Available for ZX-Uno, TBBlue and ZX Evolution TSConf");
+                "Available for ZX-Uno, TBBlue and ZX Evolution BaseConf/TSConf");
             menu_add_item_menu_tiene_submenu(array_menu_common);
             if_zxvision_topbar_menu_will_not_have_title(array_menu_common);
 

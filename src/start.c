@@ -124,6 +124,7 @@
 #include "pd765.h"
 #include "core_reduced_spectrum.h"
 #include "baseconf.h"
+#include "uartbridge.h"
 #include "settings.h"
 #include "datagear.h"
 #include "network.h"
@@ -279,6 +280,7 @@ char *driver_audio="";
 
 z80_bit added_some_osd_text_keyboard={0};
 char dump_ram_file[PATH_MAX]="";
+static int start_uartbridge=0;
 
 //el build number segun la config
 char last_version_string[255]="";
@@ -1022,6 +1024,7 @@ printf (
         "--sendtextkeystrokes-turbo          Allow turbo mode for sending keystrokes on Spectrum models\n"
         "--sendtextkeystrokes-keylength n    Length of every key pressed. n is in intervals of 1/50 seconds, from 1 to 100. So, a value of 1 means 20 ms, and 100 means 2000 ms\n"
         "--sendtextkeystrokes-nodelay        Do not send delay after every key press\n"
+        "--uartbridge-file f                 Enable the UART bridge with a host serial device or PTY\n"
 
 #ifdef USE_PTHREADS
         "--enable-remoteprotocol             Enable ZRCP remote protocol\n"
@@ -7373,6 +7376,17 @@ int parse_cmdline_options(int desde_commandline)
                 send_text_as_keystrokes_send_pause.v=0;
             }
 
+         else if (!strcmp(argv[puntero_parametro],"--uartbridge-file")) {
+            siguiente_parametro_argumento();
+            const char *path=argv[puntero_parametro];
+            if (!path[0] || strlen(path)>=PATH_MAX) {
+                debug_printf(VERBOSE_ERR,"Invalid UART bridge path");
+                return 1;
+            }
+            strcpy(uartbridge_name,path);
+            start_uartbridge=1;
+         }
+
 //Si no hay soporte de pthreads, estas opciones las permitimos pero luego no hace nada
 
             else if (!strcmp(argv[puntero_parametro],"--enable-remoteprotocol")) {
@@ -8996,6 +9010,11 @@ Also, you should keep the following copyright message, beginning with "Begin Cop
     }
 
     if (test_config_and_exit.v) exit(0);
+
+    if (start_uartbridge) {
+        uartbridge_enable();
+        if (!uartbridge_available()) exit(1);
+    }
 
     //Init random value. Usado en AY Chip y Random ram y mensajes "kidding"
     init_randomize_noise_value();

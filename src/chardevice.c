@@ -165,6 +165,13 @@ int chardevice_status(int handler)
 
 }
 
+void chardevice_discard_input(int handler GCC_UNUSED)
+{
+#if !defined(MINGW) && !defined(OTHER_UNIX)
+    tcflush(handler, TCIFLUSH);
+#endif
+}
+
 int chardevice_getspeed_enum_int(enum chardevice_speed velocidad)
 {
     switch (velocidad) {

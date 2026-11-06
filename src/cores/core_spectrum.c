@@ -367,6 +367,7 @@ void core_spectrum_fin_frame_pantalla(void)
 	//Siguiente frame de pantalla
     timer_get_elapsed_core_frame_post();
 
+    if (MACHINE_IS_BASECONF) baseconf_uart_flush_tx();
 
 
     if (MACHINE_IS_TBBLUE) {

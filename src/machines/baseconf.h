@@ -85,6 +85,9 @@ extern z80_byte *baseconf_ram_mem_table[];
 
 extern void baseconf_reset_cpu(void);
 extern void baseconf_hard_reset(void);
+extern z80_byte baseconf_uart_read(z80_byte reg);
+extern void baseconf_uart_write(z80_byte reg,z80_byte value);
+extern void baseconf_uart_flush_tx(void);
 
 extern void lee_byte_evo_aux(z80_int direccion);
 
